@@ -17,12 +17,10 @@ func requestWithBodyClose(wg *sync.WaitGroup) {
 	for {
 		resp, err := http.Get("https://www.baidu.com")
 		if err != nil {
-			log.Fatalf("HTTP request error: %v", err)
+			log.Printf("HTTP request error: %v", err)
+			continue
 		}
-		err = resp.Body.Close() // закрываем тело ответа
-		if err != nil {
-			log.Fatalf("Failed to close response body: %v", err)
-		}
+		_ = resp // without close
 
 		requests := atomic.AddUint64(&totalRequests, 1)
 		fmt.Printf("Request successful, total requests: %d\n", requests)
@@ -31,11 +29,11 @@ func requestWithBodyClose(wg *sync.WaitGroup) {
 
 func main() {
 	go func() {
-		log.Fatal(http.ListenAndServe(":8081", nil))
+		log.Fatalf("%v", http.ListenAndServe(":8082", nil))
 	}()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 50; i++ {
 		wg.Add(1)
 		go requestWithBodyClose(&wg)
 	}
