@@ -4,36 +4,41 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
+	_ "net/http/pprof"
+	"sync"
+	"sync/atomic"
 )
 
-func requestWithNoBodyClose() error {
-	_, err := http.Get("https://www.baidu.com")
-	if err != nil {
-		return fmt.Errorf("http.Get failed: %w", err)
-	}
+var totalRequests uint64
 
-	return nil
+func requestWithBodyClose(wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	for {
+		resp, err := http.Get("https://www.baidu.com")
+		if err != nil {
+			log.Fatalf("HTTP request error: %v", err)
+		}
+		err = resp.Body.Close() // закрываем тело ответа
+		if err != nil {
+			log.Fatalf("Failed to close response body: %v", err)
+		}
+
+		requests := atomic.AddUint64(&totalRequests, 1)
+		fmt.Printf("Request successful, total requests: %d\n", requests)
+	}
 }
 
 func main() {
 	go func() {
-		log.Fatal(http.ListenAndServe(":8082", nil))
+		log.Fatal(http.ListenAndServe(":8081", nil))
 	}()
 
-	step := 0
-
-	for {
-		time.Sleep(time.Microsecond * 100)
-
-		step++
-
-		err := requestWithNoBodyClose()
-		if err != nil {
-			fmt.Printf("[%d] requestNoClose failed: %s", step, err)
-			continue
-		}
-
-		fmt.Printf("[%d] ok\n", step)
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go requestWithBodyClose(&wg)
 	}
+
+	wg.Wait()
 }
